@@ -1,5 +1,6 @@
 ### Code used for Cellchat analysis and plotting split by regions
 #Starting with object 'clean_demux_full.rds' which contains all QC filtered, demuxed, immune cells
+library(CellChat)
 test_list = SplitObject(ln,split.by = 'region')
 #DimPlot(test_list[[2]])
 #DimPlot(test_list[[3]])
