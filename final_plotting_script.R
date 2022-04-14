@@ -1,40 +1,8 @@
-ln<-subset(ln,idents = c(13),invert = TRUE)
-ln<- SCTransform(ln, vars.to.regress = "percent.mt", verbose = TRUE)
-ln <- RunPCA(ln,verbose = FALSE)
-ln <- FindNeighbors(ln, dims = 1:17, verbose = FALSE)
-ln <- FindClusters(ln, verbose = FALSE,resolution = 0.6)
-ElbowPlot(ln,reduction = "pca",ndims = 40)
-ln <- ln %>% RunUMAP( dims = 1:17, verbose = FALSE,n.neighbors = 30,min.dist = 0.2)
-DimPlot(pbmc_sub,group.by = 'ADT_maxID')
-DefaultAssay(pbmc)<-'RNA'
-DimPlot(ln)
-
-pbmc.markers <- FindAllMarkers(ln, only.pos = TRUE, min.pct = 0.15, logfc.threshold = 0.2)
-#pbmc.markers %>% group_by(cluster) %>% top_n(n = 2, wt = avg_logFC)
-#top10 <- pbmc.markers %>% group_by(cluster) %>% top_n(n = 10, wt = avg_logFC)
-b_plasma_harmony_0.2_Markers_padj0.1_Top5 <- pbmc.markers %>% group_by(cluster) %>% top_n(n = 5, wt = avg_logFC)
-DotPlot(ln,
-        features = unique(b_plasma_harmony_0.2_Markers_padj0.1_Top5$gene),
-        cols = "RdBu", assay = "RNA") + theme(axis.text.x=element_text(angle=45, hjust = 1, size = 10), axis.text.y=element_text(size = 10), text = element_text(size = 14)) + coord_flip()
-
-ln<-subset(ln,idents = c(9),invert = TRUE)
-
-
-
-new.cluster.ids <- c("Apoe Mac.", "Prolif. Mac.", "Ms4a7 Mac.", "Inflamm. Mono.", "Interm. Mac.", "Nos2 Mac.", 
-                     "CD4 T", "MoDC", "Retnla Mac.","Tcf7+ CD8 T","Exhaust CD8 T",'NK','DC')
-names(new.cluster.ids) <- levels(ln)
-ln <- RenameIdents(ln, new.cluster.ids)
-DimPlot(ln, reduction = "umap", label = TRUE, pt.size = 0.5) + NoLegend()
-
 library(Seurat)
 library(ggplot2)
 library(RColorBrewer)
 library(magrittr)
 #Starting with object 'clean_demux_full.rds' which contains all QC filtered, demuxed, immune cells
-# Cells 
-ln = readRDS("D:/Krummel Lab/SC_Experiments/20210112_CD206R/for_kelly/final_figs/20210527_full_clean_mito_removed.rds")
-ln = readRDS("D:/Krummel Lab/SC_Experiments/20210112_CD206R/for_kelly/final_figs/clean_demux_full.rds")
 
 #############Plot whole object (Figure 6B):####################
 b <- DimPlot(ln,pt.size = 1.2)
@@ -81,7 +49,8 @@ m1 <- DimPlot(mac_sub,label = TRUE,label.size = 6,pt.size = 1.5,cols = my_color_
 m1 = m1+theme(legend.text = element_text(size=20),axis.title = element_blank())
 m2 <- DimPlot(mac_sub,pt.size = 1.5,group.by = 'region')
 m2= m2+theme(legend.text = element_text(size=20),axis.title = element_blank())
-####For the CD8 T subset
+
+####For the CD8 T subset #############
 library(patchwork)
 cd8.t = subset(ln,idents = c('Tcf7+ CD8 T','Exhaust CD8 T'))
 cd8.t$region = factor(cd8.t$region,levels = c('Outer','Mid','Inner'))
@@ -89,21 +58,30 @@ DefaultAssay(cd8.t) = 'SCT'
 cd8.t <- RunPCA(cd8.t,verbose = FALSE)
 ElbowPlot(cd8.t,reduction = "pca",ndims = 40)
 cd8.t <- cd8.t %>% RunUMAP( dims = 1:8, verbose = FALSE,n.neighbors = 20,min.dist = 0.2,seed.use = 12345)
+
+###for the Mono/Mac subset (excluding the MoDC and DC) ##############
+mac_sub<-subset(ln,idents = c('Inflamm. Mono.','Interm. Mac.','Retnla Mac.','Apoe Mac.','Nos2 Mac.','Ms4a7 Mac.','Prolif. Mac.'))
+DefaultAssay(mac_sub)<-'SCT'
+mac_sub <- RunPCA(mac_sub,verbose = FALSE)
+ElbowPlot(mac_sub,reduction = "pca",ndims = 50)
+mac_sub <- RunUMAP(mac_sub, dims = 1:18, min.dist = 0.15,  verbose = TRUE,assay = "SCT",seed.use = 12345L)
+DimPlot(mac_sub,label=TRUE)
 ################################
-### For plotting Figure 6D
+
+
+###############For generating figure 6D
 m1 <- DimPlot(cd8.t,label = TRUE,label.size = 6,pt.size = 2,cols = c(my_color_palette[10:11]))
 m1 = m1+theme(legend.text = element_text(size=20),axis.title = element_blank(),legend.position = 'None')+scale_x_continuous(limits = c(-8,8),expand = c(0, 0)) +
   scale_y_continuous(limits = c(-3,3),expand = c(0, 0))
 #m2 <- DimPlot(cd8.t,pt.size = 3,group.by = 'region')
 #m2= m2+theme(legend.text = element_text(size=20),axis.title = element_blank())
 #m1 + m2 + plot_layout(ncol = 1)
-##############playing with contour plot version:
+##### for splitting out UMAPs by region: 
 #need to extract umap coordinates
 coords = cd8.t@reductions$umap@cell.embeddings
 coords = as.data.frame(coords)
 coords$region = cd8.t$region
 ghost = rgb(0,0,0,0.4)
-###############For generating figure 6D
 m2 = ggplot(data = coords,aes(x=UMAP_1,y=UMAP_2))+geom_density_2d_filled(data = subset(coords,subset = region == 'Outer'),alpha=0.4,bins=9)+scale_fill_manual(values = brewer.pal(n=9,name = "Reds"))+
   geom_point(data = coords,aes(color = region),size=2)+
   scale_color_manual(values = c('red',ghost,ghost))
@@ -119,7 +97,34 @@ m4 = ggplot(data = coords,aes(x=UMAP_1,y=UMAP_2))+geom_density_2d_filled(data = 
   scale_color_manual(values = c(ghost,ghost,'blue'))
 m4 = m4+theme_classic()+theme(legend.position = "None",legend.text = element_text(size=20),axis.title = element_blank())+scale_x_continuous(limits = c(-8,8),expand = c(0, 0)) +
   scale_y_continuous(limits = c(-3,3),expand = c(0, 0))
-m1 + m2 + m3+m4+plot_layout(ncol = 4)
+m1 + m2 + m3 + m4 + plot_layout(ncol = 4)
+
+############ For generating Figure 6E
+m1 <- DimPlot(mac_sub,label = TRUE,label.size = 6,pt.size = 1.5,cols = my_color_palette[c(1:6,9)])
+m1 = m1+theme(legend.text = element_text(size=20),axis.title = element_blank())
+##### for splitting out UMAPs by region: 
+#need to extract umap coordinates
+coords = mac_sub@reductions$umap@cell.embeddings
+coords = as.data.frame(coords)
+coords$region = factor(mac_sub$region,levels = c('Outer','Mid','Inner'))
+ghost = rgb(0,0,0,0.4)
+m2 = ggplot(data = coords,aes(x=UMAP_1,y=UMAP_2))+geom_density_2d_filled(data = subset(coords,subset = region == 'Outer'),alpha=0.4,bins=9)+scale_fill_manual(values = brewer.pal(n=9,name = "Reds"))+
+  geom_point(data = coords,aes(color = region),size=0.5)+
+  scale_color_manual(values = c('red',ghost,ghost))
+m2 = m2+theme_classic()+theme(legend.position = "None",legend.text = element_text(size=20),axis.title = element_blank())+scale_x_continuous(limits = c(-9,8),expand = c(0, 0)) +
+  scale_y_continuous(limits = c(-4,4),expand = c(0, 0))
+m3 = ggplot(data = coords,aes(x=UMAP_1,y=UMAP_2))+geom_density_2d_filled(data = subset(coords,subset = region == 'Mid'),alpha=0.5,bins=9)+scale_fill_manual(values = brewer.pal(n=9,name = "Greens"))+
+  geom_point(data = coords,aes(color = region),size=0.5)+
+  scale_color_manual(values = c(ghost,'green',ghost))
+m3 = m3+theme_classic()+theme(legend.position = "None",legend.text = element_text(size=20),axis.title = element_blank())+scale_x_continuous(limits = c(-9,8),expand = c(0, 0)) +
+  scale_y_continuous(limits = c(-4,4),expand = c(0, 0))
+m4 = ggplot(data = coords,aes(x=UMAP_1,y=UMAP_2))+geom_density_2d_filled(data = subset(coords,subset = region == 'Inner'),alpha=0.5,bins=9)+scale_fill_manual(values = brewer.pal(n=9,name = "Blues"))+
+  geom_point(data = coords,aes(color = region),size=0.5)+
+  scale_color_manual(values = c(ghost,ghost,'blue'))
+m4 = m4+theme_classic()+theme(legend.position = "None",legend.text = element_text(size=20),axis.title = element_blank())+scale_x_continuous(limits = c(-9,8),expand = c(0, 0)) +
+  scale_y_continuous(limits = c(-4,4),expand = c(0, 0))
+
+m1 + m2 + m3 + m4 + plot_layout(ncol = 4)
 
 ######## Signature score generation or the CD8 T object
 sig = list(Glycolysis_Zenith_mouseB16$X1)
@@ -128,16 +133,56 @@ VlnPlot(cd8.t,features = 'glycolysis1',group.by = 'region')
 sig = list(t_ex$X1)
 cd8.t <- AddModuleScore(object  = cd8.t,features = sig,ctrl = 50,name = c('exhaustion'),assay = 'RNA')
 VlnPlot(cd8.t,features = 'exhaustion1',group.by = 'region')
-###add antigen presentation score to monomacs
+###add antigen presentation and glycolysis score to monomacs
 GO_term_summary_antigen_presentation <- read_excel("C:/Users/KHu/Downloads/GO_term_summary_antigen_presentation.xlsx")
 ag = GO_term_summary_antigen_presentation$Symbol %>% unique()
 sig = list(ag)
-mm <- AddModuleScore(object  = mm,features = sig,ctrl = 50,name = c('antigen_presentation'),assay = 'RNA')
+mac_sub <- AddModuleScore(object  = mac_sub,features = sig,ctrl = 50,name = c('antigen_presentation'),assay = 'RNA')
+sig = list(Glycolysis_Zenith_mouseB16$X1)
+mac_sub <- AddModuleScore(object  = mac_sub,features = sig,ctrl = 50,name = c('glycolysis'),assay = 'RNA')
+######### Monocle3 analysis on Mono/Mac subset ########
+library(monocle3)
+library(SeuratWrappers)
+cds <- as.cell_data_set(mac_sub)
+cds <- cluster_cells(cds)
+plot_cells(cds, color_cells_by = "partition", show_trajectory_graph = FALSE)
+#integrated.sub <- subset(as.Seurat(cds), monocle3_partitions == 1)
+#cds <- as.cell_data_set(integrated.sub)
+cds <- learn_graph(cds)
+plot_cells(cds, label_groups_by_cluster = FALSE, label_leaves = FALSE, label_branch_points = FALSE)
+cds <- order_cells(cds)
+######## generate Supp Fig 7B
+pp = plot_cells(
+  cds,
+  color_cells_by = "pseudotime",
+  show_trajectory_graph = TRUE, cell_size = 2,trajectory_graph_segment_size = 1.5
+)
+pp+theme(legend.title = element_text(size=20),legend.text = element_text(size=20),axis.title = element_blank(),axis.text = element_blank())
+
+cds <- estimate_size_factors(cds)
+cds@rowRanges@elementMetadata@listData[["gene_short_name"]] <- rownames(mac_sub[["SCT"]])
+
+##### extract pseudotime to put as metadata
+sudo = cds@principal_graph_aux@listData$UMAP$pseudotime
+mac_sub<-AddMetaData(mac_sub,metadata = sudo,col.name = 'pseudotime')
+VlnPlot(mac_sub,features = c('pseudotime'),group.by = 'region')
+
+#### FINAL PLOTTING:
+###### for generating Supplementary Figure 7D
+plot_genes_in_pseudotime(AFD_lineage_cds,
+                         color_cells_by="region",
+                         min_expr=0.5,label_by_short_name = FALSE)+scale_color_manual(values= c('blue','green','red'))
+###### for generating Supplementary Figure 7C
+plot_genes_in_pseudotime(AFD_lineage_cds,
+                         color_cells_by="ident",
+                         min_expr=0.5,label_by_short_name = FALSE)+scale_color_manual(values= my_color_palette[c(1:6,9)])
+
 
 ######## VlnPlots w lines
 ####For a signature/module score####################
 ####################################################
-#########################   for generating figure 6F  ############
+#########################   for generating figure 6F (the cd8 t violin plots)  ############
+gene = 'glycolysis1'
 region = c('Outer','Mid','Inner')
 ln_sub = cd8.t
 Idents(ln_sub)<-factor(ln_sub$region,levels = c('Outer','Mid','Inner'))
@@ -151,6 +196,35 @@ v1 = VlnPlot(ln_sub,features = c(gene))+
                                   axis.title.y = element_text(size=20))+scale_fill_manual(values = c('red','green','blue'))
 ##########################  for generating figure 6F  ###############
 gene = 'exhaustion1'
+summary = data.frame(region)
+summary$mean = c(mean(ln_sub[[gene]][ln_sub$region == 'Outer',1]),mean(ln_sub[[gene]][ln_sub$region == 'Mid',1]),mean(ln_sub[[gene]][ln_sub$region == 'Inner',1]))
+summary$ident = summary$region
+v2 = VlnPlot(ln_sub,features = c(gene))+  
+  geom_path(data = summary,aes(x=region,y=mean,group=1),size=1.2,linetype = 2)+ggtitle('CD8 T Exhaustion')+
+  geom_point(data = summary,aes(x=region,y=mean,group=1),shape=23,fill='white',color = 'black',size=2,stroke=2)+
+  labs(y='Signature Score')+theme(axis.title.x = element_blank(),axis.text.x = element_text(size=20),legend.position = 'None',axis.text.y = element_text(size = 20),
+                                  axis.title.y = element_text(size=20))+scale_fill_manual(values = c('red','green','blue'))
+
+v1+v2+plot_layout(ncol=2)
+
+###################### for generating bottom half of figure 6F (the monomac violin plots)
+gene = 'pseudotime'
+region = c('Outer','Mid','Inner')
+ln_sub = mac_sub
+Idents(ln_sub)<-factor(ln_sub$region,levels = c('Outer','Mid','Inner'))
+summary = data.frame(region)
+summary$mean = c(mean(ln_sub[[gene]][ln_sub$region == 'Outer',1]),mean(ln_sub[[gene]][ln_sub$region == 'Mid',1]),mean(ln_sub[[gene]][ln_sub$region == 'Inner',1]))
+summary$ident = summary$region
+v1 = VlnPlot(ln_sub,features = c(gene))+  
+  geom_path(data = summary,aes(x=region,y=mean,group=1),size=1.2,linetype = 2)+ggtitle('CD8 T Glycolysis')+
+  geom_point(data = summary,aes(x=region,y=mean,group=1),shape=23,fill='white',color = 'black',size=2,stroke=2)+
+  labs(y='Signature Score')+theme(axis.title.x = element_blank(),axis.text.x = element_text(size=20),legend.position = 'None',axis.text.y = element_text(size = 20),
+                                  axis.title.y = element_text(size=20))+scale_fill_manual(values = c('red','green','blue'))
+##########################  for generating figure 6F  ###############
+gene = 'glycolysis1'
+region = c('Outer','Mid','Inner')
+ln_sub = mac_sub
+Idents(ln_sub)<-factor(ln_sub$region,levels = c('Outer','Mid','Inner'))
 summary = data.frame(region)
 summary$mean = c(mean(ln_sub[[gene]][ln_sub$region == 'Outer',1]),mean(ln_sub[[gene]][ln_sub$region == 'Mid',1]),mean(ln_sub[[gene]][ln_sub$region == 'Inner',1]))
 summary$ident = summary$region
@@ -275,5 +349,6 @@ ggsave(g18, file = "~/Krummel lab/20210112_CD206R/for_kelly/m1_v_exhaust.pdf",he
 
 ggsave(gbig, file = "~/Krummel lab/20210112_CD206R/for_kelly/2x3grid.pdf",height= 6,width=12)
 gbig+theme(axis.title.x = element_text(size=10))
+
 
 
